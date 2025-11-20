@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { ThirdwebEngine } from 'thirdweb-engine';
-import { ethers } from 'ethers';
+const ethers = require('ethers');
 
 // Import the config from your project
 import { config } from '../../config/config';
