@@ -1,6 +1,5 @@
-import { NextApiRequest, NextApiResponse } from 'next';
 import { ThirdwebEngine } from 'thirdweb-engine';
-const ethers = require('ethers');
+const ethers = require('ethers'); // استفاده از require برای رفع مشکلات نوع‌دهی و سازگاری
 
 // Import the config from your project
 import { config } from '../../config/config';
@@ -16,24 +15,25 @@ const engine = new ThirdwebEngine({
 const contractAddress = config.contractAddress;
 const chainId = config.thirdweb.chainId;
 
-// Define the logic for the Farcaster Frame API
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+// Define the logic for the Farcaster Frame API using the required POST method for Next.js 14
+export async function POST(req: Request) {
+    
+    // تابع GET برای جلوگیری از خطا در مرورگر
     if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method Not Allowed' });
+        return new Response("Method Not Allowed. Please send a POST request.", { status: 405 });
     }
 
     try {
-        const { castId, frameActionBody } = req.body;
-
-        // Verify the message (optional, but highly recommended)
-        // You would typically verify the Farcaster Frame message signature here using NEYNAR_API_KEY
-        // For simplicity, we skip full verification but ensure required fields are present.
+        // خواندن بدنه درخواست JSON (روش استاندارد در route.ts)
+        const body = await req.json();
+        const { frameActionBody } = body;
 
         if (!frameActionBody || !frameActionBody.fid) {
-            return res.status(400).json({ error: 'Invalid Farcaster Frame Action' });
+            return new Response(JSON.stringify({ error: 'Invalid Farcaster Frame Action' }), { status: 400 });
         }
 
-        const userAddress = frameActionBody.address || '0x...'; // Address derived from frameActionBody.fid
+        // در این مرحله، ما آدرس کیف پول کاربر را از frameActionBody می‌گیریم
+        const userAddress = frameActionBody.address || '0x...'; 
 
         // 1. Prepare the transaction using thirdweb Engine
         const tx = await engine.erc721.claim.prepare({
@@ -49,8 +49,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
 
         // Respond with a success image or final frame state
-        res.setHeader('Content-Type', 'text/html');
-        res.status(200).send(`
+        return new Response(`
             <!DOCTYPE html>
             <html>
             <head>
@@ -62,10 +61,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 <meta property="fc:frame:button:1:target" content="https://basescan.org/tx/${result.transactionHash}" />
             </head>
             </html>
-        `);
+        `, {
+            headers: { 'Content-Type': 'text/html' },
+            status: 200
+        });
+
     } catch (error) {
         console.error('Frame Error:', error);
-        res.status(500).send(`
+
+        // Respond with an error frame
+        return new Response(`
             <!DOCTYPE html>
             <html>
             <head>
@@ -75,6 +80,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 <meta property="fc:frame:button:1" content="Try Again" />
             </head>
             </html>
-        `);
+        `, {
+            headers: { 'Content-Type': 'text/html' },
+            status: 500
+        });
     }
+}
+
+
+// لازم است تابع GET نیز تعریف شود تا Next.js Build خطا ندهد
+export async function GET() {
+    return new Response(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta property="fc:frame" content="vNext" />
+            <meta property="fc:frame:image" content="${config.thirdweb.vercelUrl}/frame-image.png" />
+            <meta property="fc:frame:post_url" content="${config.thirdweb.vercelUrl}/api/frame" />
+            <meta property="fc:frame:button:1" content="Mint Your NFT" />
+        </head>
+        </html>
+    `, {
+        headers: { 'Content-Type': 'text/html' },
+        status: 200
+    });
 }
